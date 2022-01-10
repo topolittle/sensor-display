@@ -1,0 +1,12 @@
+[Unit]
+Description = sensor-monitor
+After = multi-user.target
+Wants = multi-user.target
+
+[Service]
+ExecStart=/opt/sensor-monitor/sensor_monitor -v
+Restart=on-failure
+StartLimitInterval=30s
+
+[Install]
+WantedBy = graphical.target

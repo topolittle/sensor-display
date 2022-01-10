@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+
+"""
+sensor monitor for the Arduiono sensor display head unit.
+This code sends the CPU, GPU and System environmental information
+to the sensor display unit over a serial connection.
+A configuration file location in /etc/sensor-monitor/sensor/minitor.conf
+is required. A sample file if provided with this source.
+Author: S. Gilbert
+"""
+
+from os import path
+import signal
+import argparse
+import logging
+import sys
+from configparser import ConfigParser
+# pip install pyserial
+import serial
+# Todo: make pynvlm import conditional for non NVIDIA platform
+# pip install nvidia-ml-py
+import pynvml
+from monitoring_item import MonitoringItem
+from monitoring_type import MonitoringType
+from configuration import Configuration
+
+CONFIG_FILE = "/etc/sensor-monitor/sensor-monitor.conf"
+
+# nvidia_handle is used here to simulate a static variable in the function 'get_values_nvidia'
+# since python doesn't has static variables outside classes
+# pylint: disable=invalid-name
+nvidia_handle = None
+
+
+def exit_error(error_code: int, message: str=None):
+    """
+    Exit the program with the specified error code
+
+    Parameters
+    ----------
+    error_code: int
+        The exit code to return when the process exit
+
+    message: str (optional)
+        The error message to print to the stderr
+
+    Return
+    ------
+    void
+    """
+
+    if message is not None:
+        logging.error(message)
+    sys.exit(error_code)
+
+
+def parse_config():
+    """
+    Read the configuration file and return a configuration object and a
+    an array of sensors to monitor
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    A Configuration and an array of MonitoringItem
+
+    """
+
+    configuration = None
+    monitoring_items = []
+    pooling_interval = None
+    display_interval = None
+    if not path.exists(args.config_file):
+        exit_error(2, f"The configuration file is not found at {args.config_file}")
+
+    config = ConfigParser()
+    config.read(args.config_file)
+    for section in ['CPU', 'SYSTEM', 'GPU', 'MISC']:
+        if not section in config:
+            exit_error(2, f"Missing '{section}' section in configuration file")
+
+        if section != 'MISC':
+            if not config.getboolean(section, 'disable', fallback=False):
+                if not config.has_option(section, 'type'):
+                    exit_error(2, f"Missing 'type' property in section '{section}'")
+                monitoring_type_cfg = config.get(section, 'type')
+                if monitoring_type_cfg == 'sysfs':
+                    monitoring_type = MonitoringType.SYSFS
+                elif monitoring_type_cfg == 'nvidia_api':
+                    monitoring_type = MonitoringType.NVIDIA_API
+                elif monitoring_type_cfg == 'amd_api':
+                    monitoring_type = MonitoringType.AMD_API
+                else:
+                    exit_error(1, f"Unknow type '{monitoring_type}' for section '{section}'")
+
+                items = config.items(section)
+                cmd = section[0:1]
+                if monitoring_type is MonitoringType.SYSFS:
+                    temperatures = []
+                    fans = []
+                    for item, sensor_path in items:
+                        if item.startswith('temperature'):
+                            logging.debug("Found temperature config for %s section: %s", \
+                                section, sensor_path)
+                            temperatures.append(sensor_path)
+                        elif item.startswith('fan'):
+                            logging.debug("Found fan config for %s section: %s", \
+                                section, sensor_path)
+                            fans.append(sensor_path)
+                    monitoring_items.append(MonitoringItem(\
+                        monitoring_type, \
+                        cmd + 'T', \
+                        temperatures))
+                    monitoring_items.append(MonitoringItem(\
+                        monitoring_type, \
+                        cmd + 'F', \
+                        fans))
+                else:
+                    if args.disable_gpu:
+                        logging.warning("The GPU pooling is disabled from the command line")
+                    else:
+                        logging.debug("%s config set to %s", section, monitoring_type.name)
+                        monitoring_items.append(MonitoringItem(monitoring_type, cmd + 'T'))
+                        monitoring_items.append(MonitoringItem(monitoring_type, cmd + 'F'))
+                        monitoring_items.append(MonitoringItem(monitoring_type, cmd + 'P'))
+        else:
+            ## Interpret the MISC section
+            misc = config[section]
+            if 'display-interval' in misc:
+                display_interval = misc['display-interval']
+            if 'pooling-interval' in misc:
+                pooling_interval = misc['pooling-interval']
+            if not 'tty' in misc:
+                exit_error(2, f"You must provide a tty device in the {section} section")
+            try:
+                configuration = Configuration(misc['tty'], pooling_interval, display_interval)
+            except FileNotFoundError as err:
+                exit_error(err.errno, f"In configuration - {misc['tty']}: {err.strerror}")
+            except TypeError as err:
+                exit_error(1, f"In configuration: {err.args[0]}")
+
+    return configuration, monitoring_items
+
+
+def shutdown_api():
+    """
+    Close the GPU API, if it was previously opened
+    """
+
+    # pylint: disable=global-statement
+    global nvidia_handle
+    if nvidia_handle is not None:
+        logging.debug("Shutting down the NVIDIA API")
+        pynvml.nvmlShutdown()
+        nvidia_handle = None
+
+
+def get_values_amd(cmd : str) -> str:
+    """
+    Retrieve the sensor corresponding to the specified command
+    using the AMD api
+
+    Parameters
+    ----------
+    cmd: str
+        The head unit base command to use. This is also used
+        to find out which sensor to probe
+
+    Returns
+    -------
+    A string containing the full command to send to the head unit
+
+    """
+
+    raise NotImplementedError("AMD GPU are not supported yet!")
+
+
+def get_values_nvidia(cmd: str) -> str:
+    """
+    Retrieve the sensor corresponding to the specified command
+    using the NVIDIA NVML api
+
+    Parameters
+    ----------
+    cmd: str
+        The head unit base command to use. This is also used
+        to find out which sensor to probe
+
+    Returns
+    -------
+    A string containing the full command to send to the head unit
+
+    """
+
+    # pylint: disable=global-statement
+    global nvidia_handle
+    if nvidia_handle is None:
+        logging.debug("Initializing NVIDIA GPU API")
+        pynvml.nvmlInit()
+        gpu_count = pynvml.nvmlDeviceGetCount()
+        if gpu_count <= 0:
+            raise RuntimeError("No NVIDIA GPU found")
+        else:
+            nvidia_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            logging.debug("Found %s with %s GiB", \
+                str(pynvml.nvmlDeviceGetName(nvidia_handle).decode('utf-8')), \
+                str(round(pynvml.nvmlDeviceGetMemoryInfo(nvidia_handle).total \
+                    / 1024 / 1024 / 1024, 2)))
+    sensor = cmd[1]
+    val = None
+    if sensor == 'T':
+        val = pynvml.nvmlDeviceGetTemperature(nvidia_handle, pynvml.NVML_TEMPERATURE_GPU)
+        logging.debug("GPU reports a temperature of %dC", val)
+    elif sensor == 'F':
+        val = pynvml.nvmlDeviceGetFanSpeed(nvidia_handle)
+        logging.debug("GPU reports fan speed at %d%%", val)
+        if val > 100:
+            val = 100
+    elif sensor == 'P':
+        val = pynvml.nvmlDeviceGetPowerUsage(nvidia_handle)
+        logging.debug("GPU reports a power consumption of %d milliwatts", val)
+        val = round(val / 1000)
+    if val is not None:
+        return f"{cmd}{str(val)};"
+    else:
+        raise NameError(f"The command {cmd} is not recognized")
+
+
+def monitor(serial_connection, pooling_interval: float, monitoring_items):
+    """
+    Monitor the provided items array at the specified interval and send
+    the result over a serial port
+
+    Parameters
+    ----------
+    serial_connection: Serial
+        An instance of the Serial object
+
+    pooling_interval: float
+        The interval, in seconds at which the sensors should pooled
+
+    monitoring_items: MonitoringType[]
+        An array of sensor to monitor
+
+    Returns
+    -------
+    void
+    """
+
+    logging.info("Hardware monitoring started")
+    while True:
+        commands = list()
+        for mi in monitoring_items:
+            if mi.monitoring_type == MonitoringType.SYSFS:
+                average = 0
+                for p in mi.paths:
+                    with open(p, 'r', encoding='ascii') as f:
+                        average += int(f.read().rstrip())
+                average /= len(mi.paths)
+                if mi.cmd[1] == 'T':
+                    logging.debug("Read average temperature of %d millidegree for %s", \
+                        average, 'CPU' if mi.cmd.startswith('C') else 'SYSTEM')
+                    # Temperatures are expressed in millidegree, they must be divided by 1000
+                    # before sending it to the head unit
+                    commands.append(f"{mi.cmd}{str(round(average / 1000))};")
+                else:
+                    logging.debug("Read average fan speed of %d RPM for %s", \
+                        average, 'CPU' if mi.cmd.startswith('C') else 'SYSTEM')
+                    commands.append(f"{mi.cmd}{str(round(average))};")
+            elif mi.monitoring_type == MonitoringType.AMD_API:
+                commands.append(get_values_amd(mi.cmd))
+            elif mi.monitoring_type == MonitoringType.NVIDIA_API:
+                commands.append(get_values_nvidia(mi.cmd))
+        serial_cmd = ''.join(commands)
+        logging.debug("Sending command to head unit: %s", serial_cmd)
+        serial_connection.write(bytes(serial_cmd, encoding='ascii'))
+        logging.debug("Sleeping for %d seconds", pooling_interval)
+        sig = signal.sigtimedwait([signal.SIGINT, signal.SIGTERM], pooling_interval)
+        if sig is not None:
+            logging.debug("%s received. Stopping the pooling loop", \
+                "SIGINT" if sig.si_signo == signal.SIGINT else "SIGTERM")
+            break
+    shutdown_api()
+
+
+parser = argparse.ArgumentParser(description='Sensor Monitor')
+parser.add_argument('-c', '--config-file', \
+    type=str, default=(CONFIG_FILE), \
+    help=f"Alternate config file. Default: {CONFIG_FILE}")
+parser.add_argument('-g', '--disable-gpu', \
+    action='store_true', \
+    help="Disable the GPU pooling. Usefull when running in a Docker \
+        without the nvidia-container-toolkit")
+parser.add_argument('-v', '--verbose', action='count',
+    help='Increment the verbosity level. Can be used multiple time, E.g.: -vv')
+args = parser.parse_args()
+if args.verbose is None:
+    logging.basicConfig(level=30, format='%(levelname)s: %(message)s')
+if args.verbose == 1:
+    logging.basicConfig(level=20, format='%(levelname)s: %(message)s')
+else:
+    logging.basicConfig(level=10, format='%(levelname)s (in %(funcName)s): %(message)s')
+
+conf, mis = parse_config()
+logging.info("Serial interface set to %s", conf.tty)
+logging.info("Display interval set to %s ms", conf.display_interval)
+logging.info("Pooling interval set to %s ms", conf.pooling_interval)
+
+# A handler is required for sigtimedwait to function properly under systemd
+# pylint: disable=unused-argument, missing-function-docstring
+def dummy_handler(sigterm, frame):
+    pass
+signal.signal(signal.SIGTERM, dummy_handler)
+
+with serial.Serial(conf.tty, 115200) as serial_port:
+    logging.debug("Successfully opened serial interface on %s", conf.tty)
+    # Set the display interval configuration to the unit
+    serial_port.write(bytes(f"DT{conf.display_interval};", encoding='ascii'))
+    monitor(serial_port, conf.pooling_interval / 1000.0, mis)
+
+logging.info("%s was terminated successfully", path.basename(__file__))

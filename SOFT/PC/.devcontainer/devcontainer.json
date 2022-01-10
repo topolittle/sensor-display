@@ -1,0 +1,45 @@
+// For format details, see https://aka.ms/devcontainer.json
+{
+	"name": "Python dev",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".",
+		"args": {
+			"USER_NAME": "vscode",
+			"PYTHON_VERSION": "3.9",
+		 }
+	},
+
+	// Set *default* container specific settings.json values on container create.
+	"settings": { 
+		"python.languageServer": "Pylance",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": true,
+		"python.pythonPath": "/usr/local/bin/python",
+		"python.defaultInterpreterPath": "/usr/local/bin/python",
+		"python.formatting.autopep8Path": "/usr/local/bin/autopep8",
+		"python.formatting.yapfPath": "/usr/local/bin/yapf",
+		"python.linting.banditPath": "/usr/local/bin/bandit",
+		"python.linting.mypyPath": "/usr/local/bin/mypy",
+		"python.linting.pycodestylePath": "/usr/local/bin/pycodestyle",
+		"python.linting.pydocstylePath": "/usr/local/bin/pydocstyle",
+		"python.linting.pylintPath": "/usr/local/bin/pylint"
+	},
+
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"ms-python.python",
+		"ms-python.vscode-pylance",
+		"arjun.swagger-viewer",
+		"yzhang.markdown-all-in-one"
+	],
+
+	// --privileged is required to have access to the serial port from the Docker
+	"runArgs": [
+		"--privileged"
+	],
+
+	"initializeCommand": "printf DIALOUT_GID=$(getent group dialout | cut -d ':' -f 3)\\\\nUSER_UID=$(id -u)\\\\nUSER_GID=$(id -g)\\\\n > ${localWorkspaceFolder}/.devcontainer/envfile",
+
+	"remoteUser": "vscode"
+}

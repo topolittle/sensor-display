@@ -1,0 +1,7 @@
+{
+    "sketch": "src/sensors_display/sensors_display.ino",
+    "board": "arduino:avr:leonardo",
+    "output": "output",
+    "port": "/dev/ttyACM0",
+    "programmer": "arduino:usbtinyisp"
+}

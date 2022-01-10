@@ -1,0 +1,33 @@
+These drawings, artworks, pictures and 3d models are distributed under the MIT License terms
+and agreements.
+
+RESTRICTION:
+The 3rd parties models from the grabcad.com website used in this design are NOT under the MIT license and
+are licenced only for non-commercial uses. See the 'Credit' section in the included readme.md to find out
+which models felts under this restriction.
+
+Copyright 2021 Stephane Gilbert
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Note:
+The use of the names NVIDIA, Arduino and AMD in this source code is only for
+documentation purpose. This project are not associated in any ways with these
+compagnies or trademarks. All trademarks are the property of their respective
+owners.
