@@ -58,3 +58,19 @@ Each serial command has the forms of `CCV..V;` where:
  to 34 celcius, the CPU temperature to 55 celcius and the CPU fan speed to 1152 RPM.  
  Refer to the source code to the complete list of accepted commands.
  
+# Using with Visual Studio Code
+## Using the devcontainer
+The devcontainer is a self-contained environment that allows to compiles and upload
+Arduino source code without having to install anything on your computer. You just need Docker.
+[More Information about VSCode devcontainer here.](https://code.visualstudio.com/docs/remote/containers)
+1. Open this folder (where this README.MD is located)
+2. Hit Shift-CTRL-P  to open the command palette
+3. Type and select: Remote-Containers: Reopen in Container
+
+## Inside the devcontainer
+You will have access to intellisense, syntax highlighting, build, upload and many more.
+Take a look [here](https://marketplace.visualstudio.com/items?itemName=vsciot-vscode.vscode-arduino) for the available features.
+
+### Commands in a nutshell
+**Build / Verify:** ALT+CTRL+R  
+**Upload:** ALT+CTRL+U
