@@ -179,7 +179,11 @@ bool isButtonDebounced()
  *  SF<system_fan>;
  * 
  * Sets the periode at which the CPU, GPU and system stats will cycle on the display, in milliseconds
- * DT<periode_ms>; */
+ * DT<periode_ms>;
+ * 
+ * Sets the device in 'Awaiting Data' mode
+ * AD;
+ */
 void processSerialData()
 {
     if (Serial1.available() > 0)
@@ -226,6 +230,10 @@ void processSerialData()
         {
             StatsDisplayTimeMs = (u16)serValue;
             StoreDataToEeprom();
+        }
+        else if (serCommand == "AD")
+        {
+            DataAvailable = false;
         }
     }
 }
