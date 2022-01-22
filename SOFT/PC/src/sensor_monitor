@@ -283,6 +283,11 @@ def monitor(serial_connection, pooling_interval: float, monitoring_items):
             logging.debug("%s received. Stopping the pooling loop", \
                 "SIGINT" if sig.si_signo == signal.SIGINT else "SIGTERM")
             break
+
+    # Making a clean exit
+    logging.debug("Putting the head unit in 'Awaiting Data' mode")
+    serial_connection.write(bytes("AD;", encoding='ascii'))
+
     shutdown_api()
 
 
